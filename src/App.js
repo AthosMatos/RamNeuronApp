@@ -6,9 +6,10 @@ function App()
   const [canvas,setCanvas] = useState()
   const [canvasGrid,setcanvasGrid] = useState()
   const [segAmount,setsegAmount] = useState(4)
-  const [TrainedRams,setTrainedRams] = useState(0)
+  const [TrainedTuplas,setTrainedTuplas] = useState(0)
   const [segCanvasCtx,setSegCanvasCtx] = useState()
   const [gridCanvasCtx,setGridCanvasCtxCanvasCtx] = useState()
+  const [NeuronTrainPorcentage,setNeuronTrainPorcentage] = useState()
 
   const canvasRef = useRef()
   const canvasGridRef = useRef()
@@ -18,6 +19,9 @@ function App()
   let SegmentationSize = 4
   let isPainting = false;
   let TrainedRamNeurons = []
+  let nextSegH = undefined
+  let intervalMS = 60
+  let NeuronIndex = 0
 
   useEffect(()=>
   {
@@ -57,85 +61,106 @@ function App()
   function VerificarImg(ImgMatrix)
   {
     let Equals = 0
-    for(let i=0;i<TrainedRamNeurons.length;i++)
+
+    if(NeuronIndex == TrainedRamNeurons.length)NeuronIndex=0
+    //console.log('TrainedRamNeurons',TrainedRamNeurons[NeuronIndex])
+    //console.log('ImgMatrix',ImgMatrix)
+
+    for(let i2 = 0;i2<TrainedRamNeurons[NeuronIndex].length;i2++)
     {
       let completelyEqual = true
-      for(let i2 = 0;i2<TrainedRamNeurons[i].length;i2++)
-      {
-        for(let i3 = 0;i3<TrainedRamNeurons[i][i2].length;i3++)
-        {
-          if(TrainedRamNeurons[i][i2][i3] != ImgMatrix[i2][i3])
-          {
-            completelyEqual = false
-            break
-          }
-        }
-      }
-      if(completelyEqual)
-      {
-        Equals++
-      }
+      if(TrainedRamNeurons[NeuronIndex][i2] != ImgMatrix[i2]) completelyEqual = false
+
+      if(completelyEqual) Equals++
     }
-    return `${(Equals/(TrainedRamNeurons.length))*100}%`
+
+    if(NeuronIndex<TrainedRamNeurons.length)NeuronIndex++
+    
+    return (Equals/(TrainedRamNeurons.length ? TrainedRamNeurons.length : 1))*100
   }
 
-  function AnalyzeImg(trainedDataSet)
+  function AnalyzeImg(trainedDataSet,myTimer)
   {
     const [w, h] = [canvas.width, canvas.height];
 
     const isBackGround = (pixel) =>
     {
       //0.1
-      var greyColor = 220
+      let greyColor = 220
       if(trainedDataSet)greyColor=255
       
       for(let i=0;i<pixel.data.length-1;i++)
       {
-        //console.log(pixel.data[i])
-        if(pixel.data[i] != greyColor) return false
+        //console.log(pixel.data[0])
+        if((pixel.data[i] != greyColor)) return false
       }
       return true
     }
 
-    let RamMatrix = []
-    let segH = h/SegmentationSize
-    let prevsegH = 0
+    let segH
+    let prevsegH
 
-    for(let iX = 0;iX<SegmentationSize;iX++)
+    if(nextSegH == undefined)
     {
-      let prevsegW = 0
-      let segW = w/SegmentationSize
-      let RamMatrix_X = []
-      //console.log(`analizing from ${prevsegH}px to ${segH}px Vertically`)
+      nextSegH = h/SegmentationSize
+      prevsegH = 0 //startSegAnalysys
+      segH = Math.round(nextSegH) //endSegAnalysys
+    }
+    else 
+    {
+      prevsegH = Math.round(nextSegH) //startSegAnalysys
+      nextSegH += h/SegmentationSize
+      segH = Math.round(nextSegH) //endSegAnalysys
+    }
+    setNeuronTrainPorcentage((Math.round(nextSegH)/h)*100)
 
-      for(let iY=0;iY<SegmentationSize;iY++)
+    gridCanvasCtx.fillStyle = 'rgb(0, 200 , 0,0.4)';
+    gridCanvasCtx.fillRect(0, prevsegH, w, h/SegmentationSize);
+
+    let prevsegW = 0
+    let segW = w/SegmentationSize
+    let RamMatrix_X = []
+    //console.log(`analizing from ${prevsegH}px to ${segH}px Vertically`)
+
+    for(let iX=0;iX<SegmentationSize;iX++)
+    {
+      let segmentIsUsed = false
+      for(let x = prevsegW;x<segW; x++)
       {
-        let segmentIsUsed = false
-        for(let x = prevsegW;x<segW; x++)
+        for(let y = prevsegH;y<segH;y++)
         {
-          for(let y = prevsegH;y<segH;y++)
-          {
-            const pixel = segCanvasCtx.getImageData(x,y,1,1)
-            //console.log(pixel)
-            if(!isBackGround(pixel)) segmentIsUsed = true
-          }
+          const pixel = segCanvasCtx.getImageData(x,y,1,1)
+          //console.log(pixel)
+          if(!isBackGround(pixel)) segmentIsUsed = true
         }
-        RamMatrix_X.push(segmentIsUsed?1:0)
-        //console.log(segmentIsUsed)
-        //console.log(`analizing from ${prevsegW}px to ${segW}px Horizontaly`)
-        prevsegW = segW
-        segW += w/SegmentationSize
       }
-      RamMatrix.push(RamMatrix_X)
-      prevsegH = segH
-      segH += h/SegmentationSize
+      RamMatrix_X.push(segmentIsUsed?1:0)
+      //console.log(segmentIsUsed)
+      //console.log(`analizing from ${prevsegW}px to ${segW}px Horizontaly`)
+      prevsegW = segW
+      segW += w/SegmentationSize
     }
 
-    //console.log(RamMatrix)
+    //console.log(RamMatrix_X)
 
-    return RamMatrix
+    if(Math.round(nextSegH) == h)
+    {
+      //console.log('clear')
+      setNeuronTrainPorcentage(0)
+      clearInterval(myTimer);
+
+      nextSegH = undefined
+      
+      setTimeout(() => {
+        GridRender() 
+      }, intervalMS);
+
+      gridCanvasCtx.fillStyle = 'rgb(0, 200 , 0,0.4)';
+      gridCanvasCtx.fillRect(0, prevsegH, w, h/SegmentationSize);
+    }
+
+    return RamMatrix_X
   }
-
 
 	const TrainFromFiles = (event) => 
   {
@@ -151,7 +176,7 @@ function App()
           CleanCanvas()
           segCanvasCtx.drawImage(img,0,0,canvas.width,canvas.height);
           TrainedRamNeurons.push(AnalyzeImg(true))
-          setTrainedRams(TrainedRamNeurons.length)
+          setTrainedTuplas(TrainedRamNeurons.length)
           
         }
         img.src = event.target.result;
@@ -168,8 +193,11 @@ function App()
     
     const canvasOffsetX = canvas.offsetLeft;
     const canvasOffsetY = canvas.offsetTop;
-    const Train = document.getElementById('Train');
-    const Analyze = document.getElementById('Analyze');
+    const TrainSection = document.getElementById('TrainSection');
+    const AnalyzeLine = document.getElementById('AnalyzeLine');
+    const AnalyzeAll = document.getElementById('AnalyzeAll');
+    //const RaiseInterval = document.getElementById('RaiseInterval');
+    //const LowerInterval = document.getElementById('LowerInterval');
 
     if (!segCanvasCtx ) return;
     
@@ -201,21 +229,35 @@ function App()
         segCanvasCtx.stroke();
     });
    
-    Train.addEventListener('click', (e) => 
+    TrainSection.addEventListener('click', (e) => 
     {
       //console.log(ctx)
-      TrainedRamNeurons.push(AnalyzeImg())
-      setTrainedRams(TrainedRamNeurons.length)
-
+      const interval = setInterval(() => 
+      {
+       TrainedRamNeurons.push(AnalyzeImg(undefined,interval))
+      },intervalMS)
       //console.log(TrainedRamNeurons)
-      
+
+      setTrainedTuplas((tt)=>tt+1)
     });
-    Analyze.addEventListener('click', (e) => 
+    AnalyzeLine.addEventListener('click', (e) => 
     {
       //console.log(AnalyzeImg())
       console.log(VerificarImg(AnalyzeImg()))
     });
+    AnalyzeAll.addEventListener('click', (e) => 
+    {
+      let porcentage = 0
 
+      const interval = setInterval(()=>
+      {
+        porcentage+=VerificarImg(AnalyzeImg(undefined,interval))
+        console.log(`${porcentage/SegmentationSize}%`)
+      },intervalMS)
+    })
+
+    //RaiseInterval.addEventListener('click', (e) => intervalMS+=50);
+    //LowerInterval.addEventListener('click', (e) => {if(intervalMS>50) intervalMS-=50});
   }
 
   const GridRender = () =>
@@ -229,14 +271,15 @@ function App()
     const LowerSegmentations = document.getElementById('LowerSegmentations');
     const ShowGrid = document.getElementById('ShowGrid');
    
-    //ctx.fillStyle = 'rgb(200, 200, 200)';
+    gridCanvasCtx.fillStyle = 'rgba(220, 0, 0, 0.2)';
     gridCanvasCtx.lineWidth = 0.5;
     gridCanvasCtx.strokeStyle = 'rgb(0, 0, 0)';
-
+    
     function drawGrid(notShow)
     {
       gridCanvasCtx.clearRect(0, 0, w, h);   
-      //ctx.fillRect(0, 0, w, h);
+      gridCanvasCtx.fillRect(0, 0, w, h);
+
       if(!notShow)
       {
         gridCanvasCtx.beginPath();
@@ -260,6 +303,7 @@ function App()
     
     RaiseSegmentations.addEventListener('click', (e) => 
     {
+      //console.log("test")
       SegmentationSize+=2
       setsegAmount(SegmentationSize)
       drawGrid(!showGrid)
@@ -272,6 +316,7 @@ function App()
     });
     LowerSegmentations.addEventListener('click', (e) => 
     {
+      
       if(SegmentationSize>4)SegmentationSize-=2
       setsegAmount(SegmentationSize)
       drawGrid(!showGrid)
@@ -282,10 +327,12 @@ function App()
       showGrid = !showGrid
     });
   }
+
   return (
     <div style={{display:'flex', flexDirection:'column',alignItems:'center',justifyContent:"center",minHeight:'100vh',minWidth:'100vw'}}>
       <p style={{position:'absolute',marginBottom:385}}>{`Segmentacoes: ${segAmount}`}</p>
-      <p style={{position:'absolute',marginTop:385}}>{`Neuronios Treinados: ${TrainedRams}`}</p>
+      <p style={{position:'absolute',marginTop:435}}>{`Neuronios Treinados: ${NeuronTrainPorcentage?NeuronTrainPorcentage:0}%`}</p>
+      <p style={{position:'absolute',marginTop:385}}>{`Tuplas Treinadas: ${TrainedTuplas}`}</p>
       
       <canvas style={{border:'solid black 1px'}} width={300} height={300} ref={canvasRef}/> 
      
@@ -315,6 +362,27 @@ function App()
         </button>
       </div>
 
+      {/*<div 
+      style=
+      {{
+        position:'absolute',
+        marginRight:520,
+        alignItems:'center',
+        justifyContent:'space-evenly',
+        display:'flex',
+        flexDirection:'column',
+        height:200,
+        marginTop:585
+      }}>
+        <p >{`Controle Intervalo`}</p>
+        <button id="RaiseInterval" style={{width:50}}>
+          <p>+</p>
+        </button>
+        <button id="LowerInterval" style={{width:50}}>
+          <p>-</p>
+        </button>
+      </div>*/}
+
       <div 
       style=
       {{
@@ -324,23 +392,27 @@ function App()
         justifyContent:'space-evenly',
         display:'flex',
         flexDirection:'column',
-        height:300
+        height:300,
       }}>
-        <p>{`Controle Segmentacao`}</p>
+        <p>{`Controle Grid`}</p>
         <button id="ShowGrid" >
           <p>Toogle Grid</p>
         </button>
         <button id="Clean" onClick={CleanCanvas}>
           <p>Limpar</p>
         </button>
-        <button id="Train" >
+        <button id="TrainSection" >
           <p>Treinar Novo</p>
         </button>
       </div>
       
-      <div style={{alignItems:'center',position:'absolute',marginTop:485,display:'flex'}}>
-        <button id="Analyze" >
-          <p>Analisar</p>
+      <div style={{alignItems:'center',position:'absolute',marginTop:585}}>
+        <button id="AnalyzeLine" >
+          <p>Analisar linha</p>
+        </button>
+
+        <button id="AnalyzeAll" >
+          <p>Analisar tudo</p>
         </button>
 
         <button style=
@@ -350,12 +422,10 @@ function App()
           display:'flex',
           flexDirection:'column',
           justifyContent:'center',
-        
         }}>
           <label htmlFor="files" >Selecionar imagens para analizar</label>
           <input id="files" style={{visibility:'hidden'}} type="file" multiple onChange={TrainFromFiles}/>
         </button>
-
       </div>
     </div>
   );
