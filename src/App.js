@@ -9,7 +9,8 @@ function App()
   const [TrainedTuplas,setTrainedTuplas] = useState(0)
   const [segCanvasCtx,setSegCanvasCtx] = useState()
   const [gridCanvasCtx,setGridCanvasCtxCanvasCtx] = useState()
-  const [NeuronTrainPorcentage,setNeuronTrainPorcentage] = useState()
+  const [NeuronTrainPorcentage,setNeuronTrainPorcentage] = useState(0)
+  const [NeuronTrainAmount,setNeuronTrainAmount] = useState(0)
 
   const canvasRef = useRef()
   const canvasGridRef = useRef()
@@ -122,7 +123,9 @@ function App()
       nextSegH += h/SegmentationSize
       segH = Math.round(nextSegH) //endSegAnalysys
     }
-    setNeuronTrainPorcentage((Math.round(nextSegH)/h)*100)
+    const porc = (Math.round(nextSegH)/h)*100
+    setNeuronTrainPorcentage(parseInt(porc))
+    setNeuronTrainAmount(parseInt((SegmentationSize * porc)/100))
 
     gridCanvasCtx.fillStyle = 'rgb(0, 200 , 0,0.4)';
     gridCanvasCtx.fillRect(0, prevsegH, w, h/SegmentationSize);
@@ -157,6 +160,7 @@ function App()
     {
       //console.log('clear')
       setNeuronTrainPorcentage(0)
+      setNeuronTrainAmount(0)
       clearInterval(myTimer);
 
       nextSegH = undefined
@@ -200,7 +204,7 @@ function App()
   const SegmentationAnalysis = () =>
   {    
     const TrainSection = document.getElementById('TrainSection');
-    const AnalyzeLine = document.getElementById('AnalyzeLine');
+    //const AnalyzeLine = document.getElementById('AnalyzeLine');
     const AnalyzeAll = document.getElementById('AnalyzeAll');
     //const RaiseInterval = document.getElementById('RaiseInterval');
     //const LowerInterval = document.getElementById('LowerInterval');
@@ -228,16 +232,20 @@ function App()
 
       setTrainedTuplas((tt)=>tt+1)
     });
+    /*
     AnalyzeLine.addEventListener('click', (e) => 
     {
       //console.log(AnalyzeImg())
       console.log(VerificarImg(AnalyzeImg()))
     });
+    */
     AnalyzeAll.addEventListener('click', (e) => 
     {
       console.log(Discriminators)
       let porcentage = 0
 
+      if(!Discriminators.length) return
+      
       const interval = setInterval(()=>
       {
         porcentage+=VerificarImg(AnalyzeImg(undefined,interval))
@@ -262,14 +270,14 @@ function App()
     const LowerSegmentations = document.getElementById('LowerSegmentations');
     const ShowGrid = document.getElementById('ShowGrid');
    
-    gridCanvasCtx.fillStyle = 'rgba(220, 0, 0, 0.2)';
+    //gridCanvasCtx.fillStyle = 'rgba(220, 0, 0, 0.2)';
     gridCanvasCtx.lineWidth = 0.5;
     gridCanvasCtx.strokeStyle = 'rgb(0, 0, 0)';
     
     function drawGrid(notShow)
     {
       gridCanvasCtx.clearRect(0, 0, w, h);   
-      gridCanvasCtx.fillRect(0, 0, w, h);
+      //gridCanvasCtx.fillRect(0, 0, w, h);
 
       if(!notShow)
       {
@@ -350,14 +358,13 @@ function App()
   return (
     <div style={{display:'flex', flexDirection:'column',alignItems:'center',justifyContent:"center",minHeight:'100vh',minWidth:'100vw'}}>
       <p style={{position:'absolute',marginBottom:385}}>{`Segmentacoes: ${segAmount}`}</p>
-      <p style={{position:'absolute',marginTop:435}}>{`Neuronios Treinados: ${NeuronTrainPorcentage?NeuronTrainPorcentage:0}%`}</p>
-      <p style={{position:'absolute',marginTop:385}}>{`Tuplas Treinadas: ${TrainedTuplas}`}</p>
       
       <canvas style={{border:'solid black 1px'}} width={300} height={300} ref={canvasRef}/> 
      
       <div style={{display:'flex',position:'absolute',left:0,top:0,bottom:0,right:0,alignItems:'center',justifyContent:'center'}}>
         <canvas style={{cursor:'crosshair',}} width={300} height={300} ref={canvasGridRef}/>
       </div>
+
       <div 
       style=
       {{
@@ -367,16 +374,17 @@ function App()
         justifyContent:'space-evenly',
         display:'flex',
         flexDirection:'column',
-        height:250
+        height:250,
+        width:100,
       }}>
-        <p >{`Controle Segmentacao`}</p>
-        <button id="RaiseSegmentations" style={{width:50}}>
+        <p style={{textAlign:'center'}}>{`Controle Segmentacao`}</p>
+        <button id="RaiseSegmentations" style={{width:100}}>
           <p>+</p>
         </button>
-        <button id="LowerSegmentations" style={{width:50}}>
+        <button id="LowerSegmentations" style={{width:100}}>
           <p>-</p>
         </button>
-        <button id="ResetSegmentations" >
+        <button style={{width:100}} id="ResetSegmentations" >
           <p>Reset</p>
         </button>
       </div>
@@ -411,40 +419,69 @@ function App()
         justifyContent:'space-evenly',
         display:'flex',
         flexDirection:'column',
-        height:300,
+        height:250,
+        width:100
       }}>
         <p>{`Controle Grid`}</p>
-        <button id="ShowGrid" >
+        <button style={{width:100}} id="ShowGrid" >
           <p>Toogle Grid</p>
         </button>
-        <button id="Clean" onClick={CleanCanvas}>
+        <button style={{width:100}} id="Clean" onClick={CleanCanvas}>
           <p>Limpar</p>
-        </button>
-        <button id="TrainSection" >
-          <p>Treinar Novo</p>
         </button>
       </div>
       
-      <div style={{alignItems:'center',position:'absolute',marginTop:585}}>
-        <button id="AnalyzeLine" >
-          <p>Analisar linha</p>
-        </button>
-
-        <button id="AnalyzeAll" >
-          <p>Analisar tudo</p>
-        </button>
-
-        <button style=
+      <div style=
+      {{
+        position:'absolute',
+        alignItems:'center',
+        justifyContent:'space-between',
+        display:'flex',
+        flexDirection:'column',
+        marginTop:465,
+        height:120
+      }}>
+        {/*
+          <button id="AnalyzeLine" >
+            <p>Analisar linha</p>
+          </button>
+        */}
+        
+        <div>
+          <p style={{margin:0}}>{`Neuronios Treinados: ${NeuronTrainAmount} (${NeuronTrainPorcentage}%)`}</p>
+          <p style={{margin:0}}>{`Discriminadores Treinados: ${TrainedTuplas}`}</p>
+        </div>
+        
+        <div style=
         {{
-          width:100,
           alignItems:'center',
+          justifyContent:'space-evenly',
           display:'flex',
-          flexDirection:'column',
-          justifyContent:'center',
+          flexDirection:'row',
+          width:340,
         }}>
-          <label htmlFor="files" >Selecionar imagens para analizar</label>
-          <input id="files" style={{visibility:'hidden'}} type="file" multiple onChange={TrainFromFiles}/>
-        </button>
+          <button style={{width:100}} id="AnalyzeAll" >
+            <p>Analisar</p>
+          </button>
+
+          <button style={{width:100}} id="TrainSection" >
+            <p>Treinar Novo</p>
+          </button>
+
+          <button style=
+          {{
+            width:100,
+            alignItems:'center',
+            display:'flex',
+            flexDirection:'column',
+            justifyContent:'center',
+          }}>
+            <label htmlFor="files" >Selecionar imagens para analizar</label>
+            <input id="files" style={{visibility:'hidden',height:0,width:0}} type="file" multiple onChange={TrainFromFiles}/>
+          
+          </button>
+        </div>
+        
       </div>
     </div>
   );
