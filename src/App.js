@@ -18,7 +18,7 @@ function App()
   let showGrid = true
   let SegmentationSize = 4
   let isPainting = false;
-  let TrainedRamNeurons = []
+  let Discriminators = []
   let nextSegH = undefined
   let intervalMS = 60
   let NeuronIndex = 0
@@ -62,21 +62,31 @@ function App()
   {
     let Equals = 0
 
-    if(NeuronIndex == TrainedRamNeurons.length)NeuronIndex=0
-    //console.log('TrainedRamNeurons',TrainedRamNeurons[NeuronIndex])
-    //console.log('ImgMatrix',ImgMatrix)
-
-    for(let i2 = 0;i2<TrainedRamNeurons[NeuronIndex].length;i2++)
+    if(NeuronIndex == Discriminators.length)NeuronIndex=0
+    //console.log('Discriminators',Discriminators[NeuronIndex])
+    console.log('ImgMatrix',ImgMatrix)
+   
+    for(let i = 0;i<Discriminators[NeuronIndex].length;i++)
     {
-      let completelyEqual = true
-      if(TrainedRamNeurons[NeuronIndex][i2] != ImgMatrix[i2]) completelyEqual = false
-
-      if(completelyEqual) Equals++
+      for(let i2 = 0;i2<Discriminators[NeuronIndex][i].length;i2++)
+      {
+        let completelyEqual = true
+        if(Discriminators[NeuronIndex][i][i2] != ImgMatrix[i2]) 
+        {
+          completelyEqual = false
+          
+          break
+        }
+  
+        if(completelyEqual) Equals++
+      }
     }
 
-    if(NeuronIndex<TrainedRamNeurons.length)NeuronIndex++
-    
-    return (Equals/(TrainedRamNeurons.length ? TrainedRamNeurons.length : 1))*100
+    if(NeuronIndex<Discriminators.length)NeuronIndex++
+
+    Equals = Equals / Discriminators[0].length
+    //return (Equals/(Discriminators.length ? Discriminators.length : 1))*100
+    return Equals
   }
 
   function AnalyzeImg(trainedDataSet,myTimer)
@@ -175,8 +185,8 @@ function App()
         {
           CleanCanvas()
           segCanvasCtx.drawImage(img,0,0,canvas.width,canvas.height);
-          TrainedRamNeurons.push(AnalyzeImg(true))
-          setTrainedTuplas(TrainedRamNeurons.length)
+          Discriminators.push(AnalyzeImg(true))
+          setTrainedTuplas(Discriminators.length)
           
         }
         img.src = event.target.result;
@@ -188,54 +198,32 @@ function App()
 	};
 
   const SegmentationAnalysis = () =>
-  {
-    const [w, h] = [canvas.width, canvas.height];
-    
-    const canvasOffsetX = canvas.offsetLeft;
-    const canvasOffsetY = canvas.offsetTop;
+  {    
     const TrainSection = document.getElementById('TrainSection');
     const AnalyzeLine = document.getElementById('AnalyzeLine');
     const AnalyzeAll = document.getElementById('AnalyzeAll');
     //const RaiseInterval = document.getElementById('RaiseInterval');
     //const LowerInterval = document.getElementById('LowerInterval');
-
-    if (!segCanvasCtx ) return;
-    
-    segCanvasCtx.fillStyle = 'rgb(220, 220, 220)';
-    segCanvasCtx.clearRect(0, 0, w, h);   
-    segCanvasCtx.fillRect(0, 0, w, h);
-    segCanvasCtx.strokeStyle = 'rgba(0, 0, 0, 1)';
-
-    canvasGrid.addEventListener('mousedown', (e) => 
-    {
-        isPainting = true;
-        segCanvasCtx.moveTo(e.clientX - canvasOffsetX , e.clientY - canvasOffsetY);
-    });
-
-    canvasGrid.addEventListener('mouseup', e => 
-    {
-        isPainting = false;
-        segCanvasCtx.stroke();
-        segCanvasCtx.beginPath();
-    });
-
-    canvasGrid.addEventListener('mousemove', (e) => 
-    {
-        if(!isPainting) return;
-        
-        segCanvasCtx.lineWidth = DrawlineWidth;
-        segCanvasCtx.lineCap = 'round';
-        segCanvasCtx.lineTo(e.clientX - canvasOffsetX , e.clientY - canvasOffsetY);
-        segCanvasCtx.stroke();
-    });
    
     TrainSection.addEventListener('click', (e) => 
     {
-      //console.log(ctx)
+      let index = 0
       const interval = setInterval(() => 
       {
-       TrainedRamNeurons.push(AnalyzeImg(undefined,interval))
+        let RAM
+        if(Discriminators[index])
+        {
+          RAM = Discriminators[index]
+        }
+        else RAM = []
+
+        RAM.push(AnalyzeImg(undefined,interval))
+        Discriminators[index] = RAM
+
+        console.log(Discriminators)
+        index++
       },intervalMS)
+      
       //console.log(TrainedRamNeurons)
 
       setTrainedTuplas((tt)=>tt+1)
@@ -247,6 +235,7 @@ function App()
     });
     AnalyzeAll.addEventListener('click', (e) => 
     {
+      console.log(Discriminators)
       let porcentage = 0
 
       const interval = setInterval(()=>
@@ -263,7 +252,9 @@ function App()
   const GridRender = () =>
   {
     const [w, h] = [canvasGrid.width, canvasGrid.height];
-    
+    const canvasOffsetX = canvas.offsetLeft;
+    const canvasOffsetY = canvas.offsetTop;
+
     if (!gridCanvasCtx ) return;
 
     const RaiseSegmentations = document.getElementById('RaiseSegmentations');
@@ -301,6 +292,34 @@ function App()
     }
     drawGrid()
     
+    segCanvasCtx.fillStyle = 'rgb(220, 220, 220)';
+    segCanvasCtx.clearRect(0, 0, w, h);   
+    segCanvasCtx.fillRect(0, 0, w, h);
+    segCanvasCtx.strokeStyle = 'rgba(0, 0, 0, 1)';
+
+    canvasGrid.addEventListener('mousedown', (e) => 
+    {
+        isPainting = true;
+        segCanvasCtx.moveTo(e.clientX - canvasOffsetX , e.clientY - canvasOffsetY);
+    });
+
+    canvasGrid.addEventListener('mouseup', e => 
+    {
+        isPainting = false;
+        segCanvasCtx.stroke();
+        segCanvasCtx.beginPath();
+    });
+
+    canvasGrid.addEventListener('mousemove', (e) => 
+    {
+        if(!isPainting) return;
+        
+        segCanvasCtx.lineWidth = DrawlineWidth;
+        segCanvasCtx.lineCap = 'round';
+        segCanvasCtx.lineTo(e.clientX - canvasOffsetX , e.clientY - canvasOffsetY);
+        segCanvasCtx.stroke();
+    });
+
     RaiseSegmentations.addEventListener('click', (e) => 
     {
       //console.log("test")
