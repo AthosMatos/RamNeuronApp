@@ -23,7 +23,8 @@ function App()
   const [isPainting,setisPainting] = useState(false)
   const [calcFinal,setcalcFinal] = useState('')
   const [probLetter,setprobLetter] = useState('')
-
+  const[finalprob,setfinalprob] = useState(0)
+  
   const canvasRef = useRef()
   const canvasGridRef = useRef()
   const canvasAsSeeRef = useRef()
@@ -397,6 +398,7 @@ function App()
       
       SegmentationSize = dataVampire.length
       setsegAmount(SegmentationSize)
+      GridRender()
       setTrainedTuplas(dataVampire[0].length * SegmentationSize)
       
       // console.log('dataVampire',dataVampire)
@@ -532,6 +534,8 @@ function App()
 
             setcalcFinal(`V: ${Equals.V} W: ${Equals.W} X: ${Equals.X} Z: ${Equals.Z}`)
             setprobLetter(`letra desenhada: ${biggestLetter}`)
+            setfinalprob(((biggest-secondBiggest)/SegmentationSize)*100)
+
             console.log('Equals',Equals)
             console.log('biggest',biggest)
             console.log('secondBiggest',secondBiggest)
@@ -888,7 +892,7 @@ s
         
         <p style={{margin:0}}>{`${calcFinal}`}</p>
         <p style={{margin:0}}>{probLetter}</p>
-        
+        <p style={{margin:0}}>{`Probabilidade: ${finalprob}%`}</p>
       </div>
     </div>
   );
