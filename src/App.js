@@ -21,7 +21,8 @@ function App()
   const [canvasOffsetY,setcanvasOffsetY] = useState(0)
 
   const [isPainting,setisPainting] = useState(false)
-  const [calcFinal,setcalcFinal] = useState(0)
+  const [calcFinal,setcalcFinal] = useState('')
+  const [probLetter,setprobLetter] = useState('')
 
   const canvasRef = useRef()
   const canvasGridRef = useRef()
@@ -34,7 +35,7 @@ function App()
   let showGrid = true
   let SegmentationSize = 4
   let Discriminators = []
-  let lettersData = []
+  let lettersData = {}
   let lettersAnalyzed = []
   let nextSegH = undefined
   let intervalMS = 60
@@ -95,26 +96,61 @@ function App()
     segCanvasCtx.fillRect(0, 0, w, h);
   }
 
-  function VerificarImg(ImgMatrix)
+  function VerificarImg(DecimalLine,Equals)
   {
-    let Equals = 0
-  
+    function setEquals(key,isOn)
+    {
+      switch (key) {
+        case 0:
+         {
+          if(isOn)Equals.V++ 
+          break
+         }
+        case 1:
+        {
+          if(isOn)Equals.W++
+          break
+        }
+        case 2:
+        {
+          if(isOn)Equals.X++
+          break
+        }
+        case 3:
+        {
+          if(isOn)Equals.Z++
+          break
+        }
+      }
+    }
+
     if(NeuronIndex == Discriminators.length)NeuronIndex=0
 
+    for(let i2=0;i2<lettersAnalyzed.length;i2++)
+    {
+      //console.log(`lettersData ${lettersAnalyzed[i]}`,lettersData[lettersAnalyzed[i]])
+      const letterIndex = lettersData[lettersAnalyzed[i2]][NeuronIndex]
+      for(let i = 0;i<letterIndex.length;i++)
+      {
+        if(letterIndex[i] == DecimalLine) 
+        {
+          setEquals(i2,true)
+          break
+        }
+        else
+        {
+          setEquals(i2,false)
+        }
+      }
+    }
+    
     //console.log('NeuronIndex',NeuronIndex)
     //console.log('Discriminators',Discriminators[NeuronIndex])
     //console.log('ImgMatrix',ImgMatrix)
-  
-    for(let i = 0;i<Discriminators[NeuronIndex].length;i++)
-    {
-      //console.log(Discriminators[NeuronIndex][i])
-      if(!Discriminators[NeuronIndex][i] != ImgMatrix) Equals++
-    }
 
     if(NeuronIndex<Discriminators.length)NeuronIndex++
-
     //console.log('Equals',Equals)
-
+    
     return Equals
   }
 
@@ -246,7 +282,7 @@ function App()
     return RamMatrix
   }
 
-  function TrainCurrent(trainedDataSet,endedCallBack)
+  function TrainCurrent(trainedDataSet)
   {
     let index = 0
     //console.log(endedCallBack)
@@ -291,7 +327,7 @@ function App()
 
     lettersData[currentButton] = Discriminators
 
-    //console.log(lettersData)
+    //console.log('Discriminators',lettersData)
 
     setTrainedTuplas((tt)=>tt+1)
 
@@ -305,13 +341,6 @@ function App()
       }
     }
     if(f)lettersAnalyzed.push(currentButton)
-
-    endedCallBack&& endedCallBack()
-  }
-
-  const setTrainedFiles = (event) =>
-  {
-    
   }
 
 	const TrainFromFiles = (event) => 
@@ -333,12 +362,57 @@ function App()
       }
       reader.readAsDataURL(event.target.files[i]);  
     }
-	};
+	}
+
+  const LoadDataSet = (event) => 
+  {
+    var reader = new FileReader();
+    reader.onload = (event)=>
+    {
+      const jsu =  JSON.parse(event.target.result)
+      lettersData = jsu
+      Discriminators = jsu[currentButton]
+
+      let dataVampire
+      if(jsu.V)
+      {
+        dataVampire = jsu.V
+        lettersAnalyzed.push('V')
+      }
+      if(jsu.W)
+      {
+        dataVampire = jsu.W
+        lettersAnalyzed.push('W')
+      }
+      if(jsu.X)
+      {
+        dataVampire = jsu.X
+        lettersAnalyzed.push('X')
+      }
+      if(jsu.Z)
+      {
+        dataVampire = jsu.Z
+        lettersAnalyzed.push('Z')
+      }
+      
+      SegmentationSize = dataVampire.length
+      setsegAmount(SegmentationSize)
+      setTrainedTuplas(dataVampire[0].length * SegmentationSize)
+      
+      // console.log('dataVampire',dataVampire)
+      // console.log('lettersData',lettersData)
+      // console.log('Discriminators',Discriminators)
+      //console.log(jsu)
+    }
+    reader.readAsText(event.target.files[0])
+
+	}
 
   const SegmentationAnalysis = () =>
   {    
     const TrainSection = document.getElementById('TrainSection');
     const files = document.getElementById('files');
+    const setTrainedFiles = document.getElementById('setTrainedFiles');
     const DownloadDATA = document.getElementById('DownloadDATA');
     //const AnalyzeLine = document.getElementById('AnalyzeLine');
     const AnalyzeAll = document.getElementById('AnalyzeAll');
@@ -389,10 +463,14 @@ function App()
       ComputingGridRender(AnalyzeFullImg())
 
       if(!Discriminators.length) return
-      //console.log(Discriminators)
-      //console.log(Discriminators)
-      let finalCalcMax = 0
-      let finalCalcSecMax = 0
+
+      let Equals = 
+      {
+        V:0,
+        W:0,
+        X:0,
+        Z:0,
+      }
 
       for(let i=0;i<Discriminators.length;i++)
       {
@@ -400,26 +478,67 @@ function App()
         {
           const analysedImg = AnalyzeImg(undefined)
           //console.log('analysedImg',analysedImg)
-          const res = VerificarImg(analysedImg)
-
-          //console.log('res',res)
-
-          if(res>finalCalcMax)
-          {
-            finalCalcMax = res
-          }
-          if(res>finalCalcSecMax && res<finalCalcMax)
-          {
-            finalCalcSecMax = res
-          }
+          Equals = VerificarImg(analysedImg,Equals)
 
           if(i==Discriminators.length-1)
           {
-            
-            setcalcFinal(((finalCalcMax - finalCalcSecMax)/Discriminators[0].length)*100)
-            //console.log('finalCalcMax',finalCalcMax)
-            //console.log('finalCalcSecMax',finalCalcSecMax)
-            //console.log('Discriminators',Discriminators[0].length)
+            //console.log('lettersData',lettersData)
+            //console.log('Discriminators',Discriminators)
+
+            //console.log('Equals',Equals)
+
+            let biggest = 0
+            let secondBiggest = 0
+            let biggestLetter = ''
+            let SecondbiggestLetter = ''
+
+            for(let index=0;index<4;index++)
+            {
+              let theanalyzed
+              let currLetter = ''
+
+              if(index == 0)
+              {
+                theanalyzed = Equals.V
+                currLetter = 'V'
+              }
+              else if(index == 1)
+              {
+                theanalyzed = Equals.W
+                currLetter = 'W'
+              }
+              else if(index == 2)
+              {
+                theanalyzed = Equals.X
+                currLetter = 'X'
+              }
+              else if(index == 3)
+              {
+                theanalyzed = Equals.Z
+                currLetter = 'Z'
+              }
+              
+              if(theanalyzed>biggest)
+              {
+                biggest = theanalyzed
+                biggestLetter = currLetter
+              }
+              if(theanalyzed>secondBiggest && theanalyzed<biggest)
+              {
+                secondBiggest = theanalyzed
+                SecondbiggestLetter = currLetter
+              }
+            }
+
+            setcalcFinal(`V: ${Equals.V} W: ${Equals.W} X: ${Equals.X} Z: ${Equals.Z}`)
+            setprobLetter(`letra desenhada: ${biggestLetter}`)
+            console.log('Equals',Equals)
+            console.log('biggest',biggest)
+            console.log('secondBiggest',secondBiggest)
+            console.log('biggestLetter',biggestLetter)
+            console.log('SecondbiggestLetter',SecondbiggestLetter)
+
+
           }
         },intervalMS)
       }
@@ -447,6 +566,10 @@ function App()
       URL.revokeObjectURL(link.href);
     });
 
+    setTrainedFiles.addEventListener('change', (e) => 
+    {
+      LoadDataSet(e)
+    });
     //RaiseInterval.addEventListener('click', (e) => intervalMS+=50);
     //LowerInterval.addEventListener('click', (e) => {if(intervalMS>50) intervalMS-=50});
   }
@@ -559,7 +682,8 @@ function App()
   return (
     <div style={{display:'flex', flexDirection:'column',alignItems:'center',justifyContent:"center",minHeight:'100vh',minWidth:'100vw'}}>
       <p style={{position:'absolute',marginBottom:385}}>{`Segmentacoes: ${segAmount}`}</p>
-    
+      <p style={{position:'absolute',marginBottom:385,marginLeft:700}}>{`Saida computacional`}</p>
+s
       <div style={{display:'flex',position:'absolute',left:0,top:0,bottom:0,right:0,alignItems:'center',justifyContent:'center'}}>
         <canvas style={{border:'solid black 1px'}} width={canvasSize} height={canvasSize} ref={canvasRef}/> 
       </div>
@@ -717,8 +841,8 @@ function App()
             flexDirection:'column',
             justifyContent:'center',
           }}>
-            <label htmlFor="Trainedfiles" >Selecionar banco treinado</label>
-            <input id="Trainedfiles" style={{visibility:'hidden',height:0,width:0}} type="file" multiple />
+            <label htmlFor="setTrainedFiles" >Selecionar banco treinado</label>
+            <input id="setTrainedFiles" style={{visibility:'hidden',height:0,width:0}} type="file" multiple />
 
           </button>
           <button style=
@@ -745,25 +869,26 @@ function App()
           flexDirection:'row',
           width:340,
         }}>
-          <button style={{width:50}} id='V'>
+          <button style={{width:50,backgroundColor:currentLetter=='V'?'green':''}} id='V'>
             <p>V</p>
           </button>
 
-          <button style={{width:50}} id='W'>
+          <button style={{width:50,backgroundColor:currentLetter=='W'?'green':''}} id='W'>
             <p>W</p>
           </button>
 
-          <button style={{width:50}} id='X'>
+          <button style={{width:50,backgroundColor:currentLetter=='X'?'green':''}} id='X'>
             <p>X</p>
           </button>
 
-          <button style={{width:50}} id='Z'>
+          <button style={{width:50,backgroundColor:currentLetter=='Z'?'green':''}} id='Z'>
             <p>Z</p>
           </button>
         </div>
-        <p style={{margin:0}}>{`Letra Selecionada: ${currentLetter}`}</p>
-        <p style={{margin:0}}>{`Calc Final: ${calcFinal}%`}</p>
-      
+        
+        <p style={{margin:0}}>{`${calcFinal}`}</p>
+        <p style={{margin:0}}>{probLetter}</p>
+        
       </div>
     </div>
   );
