@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 
-
 function App() 
 {
   const [canvas,setCanvas] = useState()
@@ -16,7 +15,13 @@ function App()
 
   const [NeuronTrainPorcentage,setNeuronTrainPorcentage] = useState(0)
   const [NeuronTrainAmount,setNeuronTrainAmount] = useState(0)
-  const [currentLetter,setCurrentLetter] = useState('A')
+  const [currentLetter,setCurrentLetter] = useState('V')
+
+  const [canvasOffsetX,setcanvasOffsetX] = useState(0)
+  const [canvasOffsetY,setcanvasOffsetY] = useState(0)
+
+  const [isPainting,setisPainting] = useState(false)
+  const [calcFinal,setcalcFinal] = useState(0)
 
   const canvasRef = useRef()
   const canvasGridRef = useRef()
@@ -24,15 +29,17 @@ function App()
 
   const DrawlineWidth = 10;
 
+  const canvasSize = 300
+
   let showGrid = true
   let SegmentationSize = 4
-  let isPainting = false;
   let Discriminators = []
   let lettersData = []
+  let lettersAnalyzed = []
   let nextSegH = undefined
   let intervalMS = 60
   let NeuronIndex = 0
-  let currentButton = 'A'
+  let currentButton = 'V'
 
   useEffect(()=>
   {
@@ -51,6 +58,9 @@ function App()
       setSegCanvasCtx(canvas.getContext("2d",{willReadFrequently: true}))
       setGridCanvasCtxCanvasCtx(canvasGrid.getContext("2d",{willReadFrequently: true}))
       setcanvasComputingGridCtx(canvasComputingGrid.getContext("2d",{willReadFrequently: true}))
+
+      setcanvasOffsetX(canvas.offsetLeft)
+      setcanvasOffsetY(canvas.offsetTop)
     }
   },[canvasGrid,canvas,canvasComputingGrid])
 
@@ -63,6 +73,20 @@ function App()
     }
   },[segCanvasCtx,gridCanvasCtx,canvasComputingGridCtx])
 
+  const isBackGround = (pixel) =>
+  {
+    //0.1
+    const greyColor = 220
+    const whiteColor=255
+    
+    for(let i=0;i<pixel.data.length-1;i++)
+    {
+      //console.log(pixel.data[0])
+      if((pixel.data[i] != greyColor) && (pixel.data[i] != whiteColor)) return false
+    }
+    return true
+  }
+
   function CleanCanvas()
   {
     const [w, h] = [canvas.width, canvas.height];
@@ -74,49 +98,29 @@ function App()
   function VerificarImg(ImgMatrix)
   {
     let Equals = 0
-
+  
     if(NeuronIndex == Discriminators.length)NeuronIndex=0
+
+    //console.log('NeuronIndex',NeuronIndex)
     //console.log('Discriminators',Discriminators[NeuronIndex])
     //console.log('ImgMatrix',ImgMatrix)
-   
+  
     for(let i = 0;i<Discriminators[NeuronIndex].length;i++)
     {
-      for(let i2 = 0;i2<Discriminators[NeuronIndex][i].length;i2++)
-      {
-        let completelyEqual = true
-        if(Discriminators[NeuronIndex][i][i2] != ImgMatrix[i2]) 
-        {
-          completelyEqual = false
-          break
-        }
-        if(completelyEqual) Equals++
-      }
+      //console.log(Discriminators[NeuronIndex][i])
+      if(!Discriminators[NeuronIndex][i] != ImgMatrix) Equals++
     }
 
     if(NeuronIndex<Discriminators.length)NeuronIndex++
 
-    Equals = Equals / Discriminators[0].length
-    //return (Equals/(Discriminators.length ? Discriminators.length : 1))*100
+    //console.log('Equals',Equals)
+
     return Equals
   }
 
   function AnalyzeImg(trainedDataSet,myTimer)
   {
     const [w, h] = [canvas.width, canvas.height];
-
-    const isBackGround = (pixel) =>
-    {
-      //0.1
-      let greyColor = 220
-      if(trainedDataSet)greyColor=255
-      
-      for(let i=0;i<pixel.data.length-1;i++)
-      {
-        //console.log(pixel.data[0])
-        if((pixel.data[i] != greyColor)) return false
-      }
-      return true
-    }
 
     let segH
     let prevsegH
@@ -133,16 +137,20 @@ function App()
       nextSegH += h/SegmentationSize
       segH = Math.round(nextSegH) //endSegAnalysys
     }
-    const porc = (Math.round(nextSegH)/h)*100
-    setNeuronTrainPorcentage(parseInt(porc))
-    setNeuronTrainAmount(parseInt((SegmentationSize * porc)/100))
 
-    gridCanvasCtx.fillStyle = 'rgb(0, 200 , 0,0.4)';
-    gridCanvasCtx.fillRect(0, prevsegH, w, h/SegmentationSize);
+    if(!trainedDataSet)
+    {
+      const porc = (Math.round(nextSegH)/h)*100
+      setNeuronTrainPorcentage(parseInt(porc))
+      setNeuronTrainAmount(parseInt((SegmentationSize * porc)/100))
+
+      gridCanvasCtx.fillStyle = 'rgb(0, 200 , 0,0.4)';
+      gridCanvasCtx.fillRect(0, prevsegH, w, h/SegmentationSize);
+    }
 
     let prevsegW = 0
     let segW = w/SegmentationSize
-    let RamMatrix_X = []
+    let RamMatrix_X = 0
     //console.log(`analizing from ${prevsegH}px to ${segH}px Vertically`)
 
     for(let iX=0;iX<SegmentationSize;iX++)
@@ -155,9 +163,10 @@ function App()
           const pixel = segCanvasCtx.getImageData(x,y,1,1)
           //console.log(pixel)
           if(!isBackGround(pixel)) segmentIsUsed = true
+
         }
       }
-      RamMatrix_X.push(segmentIsUsed?1:0)
+      RamMatrix_X += (segmentIsUsed?1:0)* Math.pow(2,iX)
       //console.log(segmentIsUsed)
       //console.log(`analizing from ${prevsegW}px to ${segW}px Horizontaly`)
       prevsegW = segW
@@ -169,41 +178,33 @@ function App()
     if(Math.round(nextSegH) == h)
     {
       //console.log('clear')
-      setNeuronTrainPorcentage(0)
-      setNeuronTrainAmount(0)
-      clearInterval(myTimer);
-
+      if(!trainedDataSet)
+      {
+        setNeuronTrainPorcentage(0)
+        setNeuronTrainAmount(0)
+        clearInterval(myTimer);
+      }
       nextSegH = undefined
       
-      setTimeout(() => {
-        GridRender() 
-      }, intervalMS);
-
-      gridCanvasCtx.fillStyle = 'rgb(0, 200 , 0,0.4)';
-      gridCanvasCtx.fillRect(0, prevsegH, w, h/SegmentationSize);
+      if(!trainedDataSet)
+      {
+        setTimeout(() => {
+          GridRender() 
+        }, intervalMS);
+  
+        gridCanvasCtx.fillStyle = 'rgb(0, 200 , 0,0.4)';
+        gridCanvasCtx.fillRect(0, prevsegH, w, h/SegmentationSize);
+      }
     }
 
     return RamMatrix_X
   }
 
-  function AnalyzeFullImg(trainedDataSet)
+  function AnalyzeFullImg()
   {
     const [w, h] = [canvas.width, canvas.height];
 
-    const isBackGround = (pixel) =>
-    {
-      //0.1
-      let greyColor = 220
-      if(trainedDataSet)greyColor=255
-      
-      for(let i=0;i<pixel.data.length-1;i++)
-      {
-        //console.log(pixel.data[0])
-        if((pixel.data[i] != greyColor)) return false
-      }
-      return true
-    }
-
+   
     let prevsegH = 0
     let segH = h/SegmentationSize
     let RamMatrix = []
@@ -245,83 +246,32 @@ function App()
     return RamMatrix
   }
 
-	const TrainFromFiles = (event) => 
+  function TrainCurrent(trainedDataSet,endedCallBack)
   {
-    //console.log(event.target.files)
-		for(let i=0;i<event.target.files.length;i++)
+    let index = 0
+    //console.log(endedCallBack)
+
+    ComputingGridRender(AnalyzeFullImg(trainedDataSet))
+
+    if(trainedDataSet)
     {
-      var reader = new FileReader();
-      reader.onload = function(event)
+      for(let index = 0; index<SegmentationSize; index++)
       {
-        var img = new Image();
-        img.onload = function()
+        let RAM
+        if(Discriminators[index])
         {
-          CleanCanvas()
-          segCanvasCtx.drawImage(img,0,0,canvas.width,canvas.height);
-          Discriminators.push(AnalyzeImg(true))
-          setTrainedTuplas(Discriminators.length)
-          
+          RAM = Discriminators[index]
         }
-        img.src = event.target.result;
+        else RAM = []
+
+        RAM.push(AnalyzeImg(true,undefined))
+        Discriminators[index] = RAM
       }
-      reader.readAsDataURL(event.target.files[i]);  
 
-      
+      //console.log(Discriminators)
     }
-	};
-
-  const SegmentationAnalysis = () =>
-  {    
-    const TrainSection = document.getElementById('TrainSection');
-    //const AnalyzeLine = document.getElementById('AnalyzeLine');
-    const AnalyzeAll = document.getElementById('AnalyzeAll');
-    //const RaiseInterval = document.getElementById('RaiseInterval');
-    //const LowerInterval = document.getElementById('LowerInterval');
-    const A = document.getElementById('A');
-    const B = document.getElementById('B');
-    const C = document.getElementById('C');
-    const D = document.getElementById('D');
-
-    A.addEventListener('click', (e) => 
+    else
     {
-      if(lettersData['A']) Discriminators = lettersData['A']
-      else Discriminators = []
-
-      currentButton = 'A'
-      setCurrentLetter(currentButton)
-    })
-    B.addEventListener('click', (e) => 
-    {
-      if(lettersData['B']) Discriminators = lettersData['B']
-      else Discriminators = []
-
-      currentButton = 'B'
-      setCurrentLetter(currentButton)
-    })
-    C.addEventListener('click', (e) => 
-    {
-      if(lettersData['C']) Discriminators = lettersData['C']
-      else Discriminators = []
-
-      currentButton = 'C'
-      setCurrentLetter(currentButton)
-    })
-    D.addEventListener('click', (e) => 
-    {
-      if(lettersData['D']) Discriminators = lettersData['D']
-      else Discriminators = []
-
-      currentButton = 'D'
-      setCurrentLetter(currentButton)
-    })
-
-    TrainSection.addEventListener('click', (e) => 
-    {
-      let index = 0
-      //console.log(currentButton)
-
-      ComputingGridRender(AnalyzeFullImg())
-
       const interval = setInterval(() => 
       {
         let RAM
@@ -336,39 +286,166 @@ function App()
 
         //console.log(Discriminators)
         index++
-      },intervalMS)
-      
-      lettersData[currentButton] = Discriminators
-      //console.log(lettersData)
-      setTrainedTuplas((tt)=>tt+1)
-    });
-    /*
-    AnalyzeLine.addEventListener('click', (e) => 
+      },intervalMS)  
+    }
+
+    lettersData[currentButton] = Discriminators
+
+    //console.log(lettersData)
+
+    setTrainedTuplas((tt)=>tt+1)
+
+    let f = true
+    for(let i=0;i<lettersAnalyzed.length;i++)
     {
-      //console.log(AnalyzeImg())
-      console.log(VerificarImg(AnalyzeImg()))
-    });
-    */
+      if(lettersAnalyzed[i]==currentButton) 
+      {
+        f = false
+        break
+      }
+    }
+    if(f)lettersAnalyzed.push(currentButton)
+
+    endedCallBack&& endedCallBack()
+  }
+
+  const setTrainedFiles = (event) =>
+  {
+    
+  }
+
+	const TrainFromFiles = (event) => 
+  {
+    //console.log(event.target.files)
+    const files = event.target.files
+		for(let i=0;i<files.length;i++)
+    {
+      var reader = new FileReader();
+      reader.onload = function(event)
+      {
+        var img = new Image();
+        img.onload = function()
+        {
+          segCanvasCtx.drawImage(img,0,0,canvas.width,canvas.height);
+          TrainCurrent(true)
+        }
+        img.src = event.target.result;
+      }
+      reader.readAsDataURL(event.target.files[i]);  
+    }
+	};
+
+  const SegmentationAnalysis = () =>
+  {    
+    const TrainSection = document.getElementById('TrainSection');
+    const files = document.getElementById('files');
+    const DownloadDATA = document.getElementById('DownloadDATA');
+    //const AnalyzeLine = document.getElementById('AnalyzeLine');
+    const AnalyzeAll = document.getElementById('AnalyzeAll');
+    //const RaiseInterval = document.getElementById('RaiseInterval');
+    //const LowerInterval = document.getElementById('LowerInterval');
+    const V = document.getElementById('V');
+    const W = document.getElementById('W');
+    const X = document.getElementById('X');
+    const Z = document.getElementById('Z');
+
+    V.addEventListener('click', (e) => 
+    {
+      if(lettersData['V']) Discriminators = lettersData['V']
+      else Discriminators = []
+
+      currentButton = 'V'
+      setCurrentLetter(currentButton)
+    })
+    W.addEventListener('click', (e) => 
+    {
+      if(lettersData['W']) Discriminators = lettersData['W']
+      else Discriminators = []
+
+      currentButton = 'W'
+      setCurrentLetter(currentButton)
+    })
+    X.addEventListener('click', (e) => 
+    {
+      if(lettersData['X']) Discriminators = lettersData['X']
+      else Discriminators = []
+
+      currentButton = 'X'
+      setCurrentLetter(currentButton)
+    })
+    Z.addEventListener('click', (e) => 
+    {
+      if(lettersData['Z']) Discriminators = lettersData['Z']
+      else Discriminators = []
+
+      currentButton = 'Z'
+      setCurrentLetter(currentButton)
+    })
+
+    TrainSection.addEventListener('click', (e) => TrainCurrent());
+    
     AnalyzeAll.addEventListener('click', (e) => 
     {
-      //console.log(Discriminators)
-    
       ComputingGridRender(AnalyzeFullImg())
 
       if(!Discriminators.length) return
-      console.log(Discriminators)
+      //console.log(Discriminators)
+      //console.log(Discriminators)
+      let finalCalcMax = 0
+      let finalCalcSecMax = 0
 
-      const interval = setInterval(() => 
+      for(let i=0;i<Discriminators.length;i++)
       {
-        
-        console.log(VerificarImg(AnalyzeImg(undefined,interval)))
-       
+        setTimeout(() => 
+        {
+          const analysedImg = AnalyzeImg(undefined)
+          //console.log('analysedImg',analysedImg)
+          const res = VerificarImg(analysedImg)
 
-        
-        
-      },intervalMS)
+          //console.log('res',res)
 
+          if(res>finalCalcMax)
+          {
+            finalCalcMax = res
+          }
+          if(res>finalCalcSecMax && res<finalCalcMax)
+          {
+            finalCalcSecMax = res
+          }
+
+          if(i==Discriminators.length-1)
+          {
+            
+            setcalcFinal(((finalCalcMax - finalCalcSecMax)/Discriminators[0].length)*100)
+            //console.log('finalCalcMax',finalCalcMax)
+            //console.log('finalCalcSecMax',finalCalcSecMax)
+            //console.log('Discriminators',Discriminators[0].length)
+          }
+        },intervalMS)
+      }
     })
+    files.addEventListener('change', (e) => 
+    {
+      TrainFromFiles(e)
+    });
+
+    DownloadDATA.addEventListener('click', (e) => 
+    {
+      const link = document.createElement("a");
+      let jsontxt = '{\n'
+      for(let i=0;i<lettersAnalyzed.length;i++)
+      {
+        if(i!=0)jsontxt+=','
+        jsontxt += `"${lettersAnalyzed[i]}":${JSON.stringify(lettersData[lettersAnalyzed[i]])}\n`
+      }
+      jsontxt+='\n}'
+    
+      const file = new Blob([jsontxt], { type: 'text/plain' });
+      link.href = URL.createObjectURL(file);
+      link.download = "DataSet.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
 
     //RaiseInterval.addEventListener('click', (e) => intervalMS+=50);
     //LowerInterval.addEventListener('click', (e) => {if(intervalMS>50) intervalMS-=50});
@@ -377,8 +454,6 @@ function App()
   const GridRender = () =>
   {
     const [w, h] = [canvasGrid.width, canvasGrid.height];
-    const canvasOffsetX = canvas.offsetLeft;
-    const canvasOffsetY = canvas.offsetTop;
 
     if (!gridCanvasCtx ) return;
 
@@ -421,29 +496,6 @@ function App()
     segCanvasCtx.clearRect(0, 0, w, h);   
     segCanvasCtx.fillRect(0, 0, w, h);
     segCanvasCtx.strokeStyle = 'rgba(0, 0, 0, 1)';
-
-    canvasGrid.addEventListener('mousedown', (e) => 
-    {
-        isPainting = true;
-        segCanvasCtx.moveTo(e.clientX - canvasOffsetX , e.clientY - canvasOffsetY);
-    });
-
-    canvasGrid.addEventListener('mouseup', e => 
-    {
-        isPainting = false;
-        segCanvasCtx.stroke();
-        segCanvasCtx.beginPath();
-    });
-
-    canvasGrid.addEventListener('mousemove', (e) => 
-    {
-        if(!isPainting) return;
-        
-        segCanvasCtx.lineWidth = DrawlineWidth;
-        segCanvasCtx.lineCap = 'round';
-        segCanvasCtx.lineTo(e.clientX - canvasOffsetX , e.clientY - canvasOffsetY);
-        segCanvasCtx.stroke();
-    });
 
     RaiseSegmentations.addEventListener('click', (e) => 
     {
@@ -508,14 +560,37 @@ function App()
     <div style={{display:'flex', flexDirection:'column',alignItems:'center',justifyContent:"center",minHeight:'100vh',minWidth:'100vw'}}>
       <p style={{position:'absolute',marginBottom:385}}>{`Segmentacoes: ${segAmount}`}</p>
     
-      <canvas style={{border:'solid black 1px'}} width={300} height={300} ref={canvasRef}/> 
-      
+      <div style={{display:'flex',position:'absolute',left:0,top:0,bottom:0,right:0,alignItems:'center',justifyContent:'center'}}>
+        <canvas style={{border:'solid black 1px'}} width={canvasSize} height={canvasSize} ref={canvasRef}/> 
+      </div>
+
       <div style={{display:'flex',position:'absolute',left:700,top:0,bottom:0,right:0,alignItems:'center',justifyContent:'center'}}>
-        <canvas style={{border:'solid black 1px'}} width={300} height={300} ref={canvasAsSeeRef}/>
+          <canvas style={{border:'solid black 1px'}} width={canvasSize} height={canvasSize} ref={canvasAsSeeRef}/>
       </div>
 
       <div style={{display:'flex',position:'absolute',left:0,top:0,bottom:0,right:0,alignItems:'center',justifyContent:'center'}}>
-        <canvas style={{cursor:'crosshair',}} width={300} height={300} ref={canvasGridRef}/>
+        <canvas 
+        onMouseDown={(e)=>
+        {
+          setisPainting(true)
+          segCanvasCtx.moveTo(e.clientX - canvasOffsetX , e.clientY - canvasOffsetY);
+        }} 
+        onMouseUp={()=>
+        {
+          setisPainting(false)
+          segCanvasCtx.stroke();
+          segCanvasCtx.beginPath();
+        }}
+        onMouseMove={(e)=>
+        {
+          if(!isPainting) return;
+        
+          segCanvasCtx.lineWidth = DrawlineWidth;
+          segCanvasCtx.lineCap = 'round';
+          segCanvasCtx.lineTo(e.clientX - canvasOffsetX , e.clientY - canvasOffsetY);
+          segCanvasCtx.stroke();
+        }}
+        style={{cursor:'crosshair',}} width={canvasSize} height={canvasSize} ref={canvasGridRef}/>
       </div>
 
       <div 
@@ -591,8 +666,8 @@ function App()
         justifyContent:'space-between',
         display:'flex',
         flexDirection:'column',
-        marginTop:505,
-        height:180
+        marginTop:525,
+        height:200
       }}>
         {/*
           <button id="AnalyzeLine" >
@@ -611,7 +686,7 @@ function App()
           justifyContent:'space-evenly',
           display:'flex',
           flexDirection:'row',
-          width:340,
+          width:550,
         }}>
           <button style={{width:100}} id="TrainSection" >
             <p>Treinar Novo</p>
@@ -630,8 +705,35 @@ function App()
             justifyContent:'center',
           }}>
             <label htmlFor="files" >Selecionar imagens para analizar</label>
-            <input id="files" style={{visibility:'hidden',height:0,width:0}} type="file" multiple onChange={TrainFromFiles}/>
-          
+            <input id="files" style={{visibility:'hidden',height:0,width:0}} type="file" multiple />
+
+          </button> 
+
+          <button style=
+          {{
+            width:100,
+            alignItems:'center',
+            display:'flex',
+            flexDirection:'column',
+            justifyContent:'center',
+          }}>
+            <label htmlFor="Trainedfiles" >Selecionar banco treinado</label>
+            <input id="Trainedfiles" style={{visibility:'hidden',height:0,width:0}} type="file" multiple />
+
+          </button>
+          <button style=
+          {{
+            width:100,
+            alignItems:'center',
+            display:'flex',
+            flexDirection:'column',
+            justifyContent:'center',
+            height:50
+          }}
+          id="DownloadDATA"
+          >
+            Baixar banco
+      
           </button>
         </div>
 
@@ -643,23 +745,25 @@ function App()
           flexDirection:'row',
           width:340,
         }}>
-          <button style={{width:50}} id='A'>
-            <p>A</p>
+          <button style={{width:50}} id='V'>
+            <p>V</p>
           </button>
 
-          <button style={{width:50}} id='B'>
-            <p>B</p>
+          <button style={{width:50}} id='W'>
+            <p>W</p>
           </button>
 
-          <button style={{width:50}} id='C'>
-            <p>C</p>
+          <button style={{width:50}} id='X'>
+            <p>X</p>
           </button>
 
-          <button style={{width:50}} id='D'>
-            <p>D</p>
+          <button style={{width:50}} id='Z'>
+            <p>Z</p>
           </button>
         </div>
         <p style={{margin:0}}>{`Letra Selecionada: ${currentLetter}`}</p>
+        <p style={{margin:0}}>{`Calc Final: ${calcFinal}%`}</p>
+      
       </div>
     </div>
   );
