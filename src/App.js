@@ -704,7 +704,7 @@ function App()
             flexDirection:'column',
             justifyContent:'center',
           }}>
-            <label htmlFor="files" >Selecionar imagens para analizar</label>
+            <label htmlFor="files" >Selecionar imagens para treinar</label>
             <input id="files" style={{visibility:'hidden',height:0,width:0}} type="file" multiple />
 
           </button> 
